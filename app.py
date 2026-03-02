@@ -60,14 +60,14 @@ st.title(APP_TITLE)
 with st.sidebar:
     st.subheader("Steps (gated)")
     labels = [
-        "0. Upload Selection Sheet + Floorplan",
-        "1. Extract Builder Selections (Room | Trade | Material Description)",
-        "2. Extract Rooms + Transitions from Floorplan",
-        "3. Merge (Rooms/Trades/Materials + Transitions)",
-        "4. Quantities from Takeoff (ELSTON II - Takeoff.xlsx)",
-        "5. SAP Material mapping (Material_Description.xlsx)",
-        "6. Sundries & Labor (Trade_Material_Combinations.xlsx)",
-        "7. Final Review & Export",
+        "1. Start Here with Selection Sheet & Floorplan",
+        "2. What is ILG doing?",
+        "3. How does the Floor look like?",
+        "4. Rooms with Installations & Transitions",
+        "5. Installation Material Takeoff by Room & Trade",
+        "6. Get SAP # for Materials",
+        "7. Get Sundries & Labor for Trade Installation",
+        "8. Get Ready to Send to SAP",
     ]
     for i, label in enumerate(labels):
         done = "✅" if st.session_state.verified.get(i) else "⬜"
