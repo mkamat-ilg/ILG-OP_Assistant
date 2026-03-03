@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 import pandas as pd
+import time
 
 from src.pdf_utils import pdf_bytes_to_images, image_bytes_to_images, render_doc_viewer, render_doc_viewer_container
 from src.openai_client import extract_step1_builder_selections, extract_step2_rooms_transitions
@@ -51,6 +52,53 @@ TRADE_COMBO_DEFAULT_PATH = os.path.join("data", "Trade_Material_Combinations.xls
 START_SELECTION_PATH = os.path.join("data", "1-SelectionSheet.pdf")
 START_FLOORPLAN_PATH = os.path.join("data", "1-FloorPlan.pdf")
 
+# ---------------------------
+# Run timing helpers
+# ---------------------------
+def _fmt_seconds(seconds: float) -> str:
+    seconds = 0.0 if seconds is None else float(seconds)
+    if seconds < 0:
+        seconds = 0.0
+    total = int(round(seconds))
+    h = total // 3600
+    m = (total % 3600) // 60
+    s = total % 60
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def _ensure_timer_state() -> None:
+    st.session_state.setdefault("run_start_perf", None)
+    st.session_state.setdefault("run_end_perf", None)
+    st.session_state.setdefault("section_durations", {})  # key -> seconds (last run)
+    st.session_state.setdefault("section_totals", {})     # key -> cumulative seconds
+
+
+def _start_overall_timer_if_needed() -> None:
+    _ensure_timer_state()
+    if st.session_state.run_start_perf is None:
+        st.session_state.run_start_perf = time.perf_counter()
+        st.session_state.run_end_perf = None
+
+
+def _stop_overall_timer() -> None:
+    _ensure_timer_state()
+    if st.session_state.run_start_perf is not None and st.session_state.run_end_perf is None:
+        st.session_state.run_end_perf = time.perf_counter()
+
+
+def _record_section(section_key: str, elapsed_seconds: float) -> None:
+    _ensure_timer_state()
+    st.session_state.section_durations[section_key] = float(elapsed_seconds)
+    st.session_state.section_totals[section_key] = float(st.session_state.section_totals.get(section_key, 0.0)) + float(elapsed_seconds)
+
+
+def _overall_elapsed_seconds() -> float:
+    _ensure_timer_state()
+    if st.session_state.run_start_perf is None:
+        return 0.0
+    end = st.session_state.run_end_perf if st.session_state.run_end_perf is not None else time.perf_counter()
+    return float(end - st.session_state.run_start_perf)
+
 
 def _load_local_file(path: str) -> dict:
     with open(path, "rb") as f:
@@ -84,6 +132,7 @@ def init_state():
     st.session_state.setdefault("trade_combo_bytes", None)
     st.session_state.setdefault("step6_df", None)
     st.session_state.setdefault("export_xlsx_bytes", None)
+    _ensure_timer_state()
 
 init_state()
 
@@ -119,6 +168,35 @@ with st.sidebar:
 
 # Step 0
 if st.session_state.step_idx == 0:
+    st.divider()
+    st.subheader("Run timers")
+    _ensure_timer_state()
+    overall = _overall_elapsed_seconds()
+    st.metric("Overall elapsed", _fmt_seconds(overall))
+    if st.session_state.run_start_perf is None:
+        st.caption("Overall timer starts when you click a processing button (extraction/matching/generation).")
+    elif st.session_state.run_end_perf is None:
+        st.caption("Overall timer is running…")
+    else:
+        st.caption("Overall timer stopped (export built or order marked complete).")
+
+    if st.session_state.section_totals:
+        # Show cumulative totals (most meaningful for a full run)
+        items = sorted(st.session_state.section_totals.items(), key=lambda kv: kv[0])
+        for k, v in items:
+            last = st.session_state.section_durations.get(k, 0.0)
+            st.write(f"- **{k}**: total {_fmt_seconds(v)} (last {_fmt_seconds(last)})")
+    else:
+        st.caption("No section timings yet.")
+
+    cta = st.button("Reset timers", use_container_width=True)
+    if cta:
+        st.session_state.run_start_perf = None
+        st.session_state.run_end_perf = None
+        st.session_state.section_durations = {}
+        st.session_state.section_totals = {}
+        st.rerun()
+
     st.header("Please Upload Selection Sheet and Floorplan to get started")
 
     st.subheader("Start options")
@@ -219,9 +297,57 @@ if st.session_state.step_idx == 1:
         colA, colB = st.columns([1, 1])
         with colA:
             if st.button("Run OpenAI extraction", type="primary"):
+                _start_overall_timer_if_needed()
+                _t0 = time.perf_counter()
+                _start_overall_timer_if_needed()
+                _t0 = time.perf_counter()
+                _start_overall_timer_if_needed()
+                _t0 = time.perf_counter()
+                _start_overall_timer_if_needed()
+                _t0 = time.perf_counter()
+                _start_overall_timer_if_needed()
+                _t0 = time.perf_counter()
+                _start_overall_timer_if_needed()
+                _t0 = time.perf_counter()
+                _start_overall_timer_if_needed()
+                _t0 = time.perf_counter()
+                _start_overall_timer_if_needed()
+                _t0 = time.perf_counter()
+                _start_overall_timer_if_needed()
+                _t0 = time.perf_counter()
+                _start_overall_timer_if_needed()
+                _t0 = time.perf_counter()
+                _start_overall_timer_if_needed()
+                _t0 = time.perf_counter()
+                _start_overall_timer_if_needed()
+                _t0 = time.perf_counter()
                 imgs = pdf_bytes_to_images(sel_file["bytes"]) if sel_file["ext"] == "pdf" else image_bytes_to_images(sel_file["bytes"])
                 rows = extract_step1_builder_selections(imgs)
                 st.session_state.step1_df = pd.DataFrame(rows, columns=["Room", "Trade", "Material Description"])
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 1 extraction", _dt)
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 2 extraction", _dt)
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 1 extraction", _dt)
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 1 extraction", _dt)
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 1 extraction", _dt)
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 1 extraction", _dt)
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 1 extraction", _dt)
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 2 extraction", _dt)
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 2 extraction", _dt)
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 2 extraction", _dt)
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 2 extraction", _dt)
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 2 extraction", _dt)
         with colB:
             if st.button("Reset table"):
                 st.session_state.step1_df = pd.DataFrame(columns=["Room", "Trade", "Material Description"])
@@ -362,7 +488,7 @@ if st.session_state.step_idx == 3:
             column_config={
                 "Trade": st.column_config.SelectboxColumn(
                     "Trade",
-                    options=["Carpet", "Tile", "LVP", "Vinyl", "Wood", "Non Flooring"],
+                    options=["Carpet", "Tile", "LVP", "Vinyl", "Wood"],
                     required=True,
                 )
             },
@@ -522,12 +648,16 @@ if st.session_state.step_idx == 5:
         st.stop()
 
     if st.button("Run SAP material matching", type="primary"):
+        _start_overall_timer_if_needed()
+        _t0 = time.perf_counter()
         step5_df = match_materials(
             output_d=st.session_state.step4_d_df,
             master_df=st.session_state.material_master_df,
         )
         st.session_state.step5_df = step5_df
 
+        _dt = time.perf_counter() - _t0
+        _record_section("Step 5 matching", _dt)
     if st.session_state.get("step5_df") is None:
         st.info("Click 'Run SAP material matching' to generate Output.")
         st.stop()
@@ -565,12 +695,16 @@ if st.session_state.step_idx == 6:
         st.stop()
 
     if st.button("Generate Sundries & Labor", type="primary"):
+        _start_overall_timer_if_needed()
+        _t0 = time.perf_counter()
         st.session_state.step6_df = build_step6_output(
             output_d=st.session_state.step4_d_df,
             step5_df=st.session_state.step5_df,
             workbook_path=TRADE_COMBO_DEFAULT_PATH,
         )
 
+        _dt = time.perf_counter() - _t0
+        _record_section("Step 6 sundries/labor", _dt)
     if st.session_state.step6_df is None:
         st.info("Click 'Generate Sundries & Labor' to create the Step 6 output.")
         st.stop()
@@ -622,9 +756,14 @@ if st.session_state.step_idx == 7:
 
     st.subheader("Export")
     if st.button("Build Excel export", type="primary"):
+        _start_overall_timer_if_needed()
+        _t0 = time.perf_counter()
         st.session_state.export_xlsx_bytes = build_export_workbook(dfs)
         st.success("Export workbook generated.")
 
+        _dt = time.perf_counter() - _t0
+        _record_section("Step 7 export", _dt)
+        _stop_overall_timer()
     if st.session_state.export_xlsx_bytes:
         st.download_button(
             "Download Order Package (xlsx)",
@@ -650,6 +789,10 @@ if st.session_state.step_idx == 7:
 
     st.divider()
     if st.button("Mark Order as Complete", type="primary"):
+        _t0 = time.perf_counter()
         st.session_state.verified[7] = True
         st.success("Order marked complete.")
+        _dt = time.perf_counter() - _t0
+        _record_section("Step 7 complete", _dt)
+        _stop_overall_timer()
     st.stop()
