@@ -233,7 +233,7 @@ if st.session_state.step_idx == 3:
         st.markdown("**Output A:** Room (from Step 2) | Trade | Material Description")
 
         step3_a_df = st.session_state.get("step3_a_df")
-        if step3_a_df is None or step3_a_df.empty:
+        if not isinstance(step3_a_df, pd.DataFrame) or step3_a_df.empty:
             st.session_state["step3_a_df"] = outA_init
 
         def _on_step3_a_change() -> None:
@@ -280,7 +280,7 @@ if st.session_state.step_idx == 3:
 
     # Compute Output B from Output A + Step 2 adjacency
     a_df_src = st.session_state.get("step3_a_df")
-    a_df = a_df_src.copy() if a_df_src is not None else pd.DataFrame(columns=["Room", "Trade", "Material Description"])
+    a_df = a_df_src.copy() if isinstance(a_df_src, pd.DataFrame) else pd.DataFrame(columns=["Room", "Trade", "Material Description"])
 
     trade_map = {_norm_room(r): _trade_key(t) for r, t in zip(a_df.get("Room", []), a_df.get("Trade", []))}
 
