@@ -227,7 +227,12 @@ if st.session_state.step_idx == 3:
         st.markdown("**Output A:** Room (from Step 2) | Trade (from Step 1) | Material Description")
         if st.session_state.step3_a_df is None or st.session_state.step3_a_df.empty:
             st.session_state.step3_a_df = outA_init
-        st.session_state.step3_a_df = st.data_editor(
+
+        def _on_step3_a_change():
+            # Ensure dependent computations (Output B) see the latest edits in the same rerun
+            st.session_state.step3_a_df = st.session_state.get("step3_a_editor", st.session_state.step3_a_df)
+
+        edited_a = st.data_editor(
             st.session_state.step3_a_df,
             num_rows="dynamic",
             use_container_width=True,
@@ -235,9 +240,11 @@ if st.session_state.step_idx == 3:
             column_config={
                 "Trade": st.column_config.SelectboxColumn(
                     "Trade",
-                    options=["Carpet", "Tile", "LVP", "Vinyl", "Wood", "Not Flooring"],
+                    options=["Carpet", "Tile", "LVP", "Vinyl", "Wood"],
                     required=True,
+                    on_change=_on_step3_a_change,
                 )
+        st.session_state.step3_a_df = edited_a
             },
         )
 
