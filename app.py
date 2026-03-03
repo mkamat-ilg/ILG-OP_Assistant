@@ -41,8 +41,6 @@ def init_state():
     st.session_state.setdefault("step3_a_df", None)
     st.session_state.setdefault("step3_b_df", None)
     st.session_state.setdefault("room_category_map_df", None)
-
-    st.session_state.setdefault("takeoff_bytes", None)
     st.session_state.setdefault("takeoff_df", None)
 
     st.session_state.setdefault("step4_c_df", None)
@@ -317,7 +315,7 @@ if st.session_state.step_idx == 3:
             column_config={
                 "Trade": st.column_config.SelectboxColumn(
                     "Trade",
-                    options=["Carpet", "Tile", "LVP", "Vinyl", "Wood", "Non Flooring"],
+                    options=["Carpet", "Tile", "LVP", "Vinyl", "Wood"],
                     required=True,
                 )
             },
@@ -414,13 +412,10 @@ if st.session_state.step_idx == 4:
     require_verified(3)
     st.header("Step 4 – Let's get the Quantity to be ordered for Installation Materials as per TakeOff")
 
-    st.caption("Takeoff workbook is embedded with the app at: data/ELSTON II - Takeoff.xlsx. You can still upload a replacement for this session if needed.")
-    takeoff_upload = st.file_uploader("Upload ELSTON II - Takeoff.xlsx (if not preloaded)", type=["xlsx"], key="u_takeoff")
-    if takeoff_upload:
-        st.session_state.takeoff_bytes = takeoff_upload.getvalue()
+    st.caption("Gross Qty and UOM are loaded strictly from the embedded takeoff workbook: data/ELSTON II - Takeoff.xlsx")
 
     try:
-        st.session_state.takeoff_df = load_takeoff(TAKEOFF_DEFAULT_PATH, override_bytes=st.session_state.takeoff_bytes)
+        st.session_state.takeoff_df = load_takeoff(TAKEOFF_DEFAULT_PATH, override_bytes=None)
         st.success(f"Loaded takeoff rows: {len(st.session_state.takeoff_df)}")
     except Exception as e:
         st.error(f"Unable to load takeoff workbook. {e}")
@@ -430,20 +425,29 @@ if st.session_state.step_idx == 4:
         st.error("Step 3 Output A is missing/empty.")
         st.stop()
 
-    outC, outD, diag = build_step4_outputs(st.session_state.step3_a_df, st.session_state.takeoff_df)
+    if st.session_state.step1_df is None or st.session_state.step1_df.empty:
+        st.error("Step 1 output is missing/empty. Material Description must come from Selection Sheet.")
+        st.stop()
+
+    outC, outD = build_step4_outputs(
+        step3_a_df=st.session_state.step3_a_df,
+        step1_df=st.session_state.step1_df,
+        takeoff_df=st.session_state.takeoff_df,
+    )
 
     st.subheader("Output C (editable): Room | Trade | Gross Qty | UOM | Material Description")
     if st.session_state.step4_c_df is None:
         st.session_state.step4_c_df = outC
-    st.session_state.step4_c_df = st.data_editor(st.session_state.step4_c_df, num_rows="dynamic", use_container_width=True, key="step4_c_editor")
+    st.session_state.step4_c_df = st.data_editor(
+        st.session_state.step4_c_df, num_rows="dynamic", use_container_width=True, key="step4_c_editor"
+    )
 
     st.subheader("Output D (editable): Trade | Material Description | Gross Qty | UOM")
     if st.session_state.step4_d_df is None:
         st.session_state.step4_d_df = outD
-    st.session_state.step4_d_df = st.data_editor(st.session_state.step4_d_df, num_rows="dynamic", use_container_width=True, key="step4_d_editor")
-
-    st.subheader("Join diagnostics (unmatched Room/Trade)")
-    st.dataframe(diag, use_container_width=True)
+    st.session_state.step4_d_df = st.data_editor(
+        st.session_state.step4_d_df, num_rows="dynamic", use_container_width=True, key="step4_d_editor"
+    )
 
     st.divider()
     if st.button("I have verified the Quantities. Move to Step 5", type="primary"):
@@ -457,18 +461,10 @@ if st.session_state.step_idx == 5:
     require_verified(4)
     st.header("Step 5 – Let's identify the SAP Materials")
 
-    st.caption("Material master is expected at: data/Material_Description.xlsx. "
-               "If not embedded yet, upload it below for this session. (Later we can embed it permanently.)")
-
-    mm_upload = st.file_uploader("Upload Material_Description.xlsx (if not embedded)", type=["xlsx"], key="u_mat_master")
-    if mm_upload:
-        st.session_state.material_master_bytes = mm_upload.getvalue()
+    st.caption("Material master is embedded at: data/Material_Description.xlsx")
 
     try:
-        st.session_state.material_master_df = load_material_master(
-            MATERIAL_MASTER_DEFAULT_PATH,
-            override_bytes=st.session_state.material_master_bytes
-        )
+        st.session_state.material_master_df = load_material_master(MATERIAL_MASTER_DEFAULT_PATH, override_bytes=None)
         st.success(f"Loaded material master rows: {len(st.session_state.material_master_df)}")
     except Exception as e:
         st.error(f"Unable to load material master workbook. {e}")
@@ -478,21 +474,12 @@ if st.session_state.step_idx == 5:
         st.error("Step 4 Output D is missing/empty.")
         st.stop()
 
-    colA, colB = st.columns([1, 1])
-    with colA:
-        threshold = st.slider("Confidence threshold (%)", 50, 95, 80, 1)
-    with colB:
-        top_n = st.slider("Options to show when below threshold", 3, 10, 5, 1)
-
     if st.button("Run SAP material matching", type="primary"):
-        step5_df, diag = match_materials(
+        step5_df = match_materials(
             output_d=st.session_state.step4_d_df,
             master_df=st.session_state.material_master_df,
-            threshold=float(threshold),
-            top_n=int(top_n),
         )
         st.session_state.step5_df = step5_df
-        st.session_state.step5_diag = diag
 
     if st.session_state.get("step5_df") is None:
         st.info("Click 'Run SAP material matching' to generate Output.")
@@ -507,9 +494,6 @@ if st.session_state.step_idx == 5:
     )
     st.session_state.step5_df = edited
 
-    st.subheader("Low-confidence diagnostics (below threshold)")
-    st.dataframe(st.session_state.get("step5_diag", pd.DataFrame()), use_container_width=True)
-
     st.divider()
     if st.button("I have verified the SAP Materials. Move to Step 6", type="primary"):
         st.session_state.verified[5] = True
@@ -523,28 +507,22 @@ if st.session_state.step_idx == 6:
     require_verified(5)
     st.header("Step 6 – Let's get the Sundries & Labor for the Flooring Work")
 
-    st.caption("Trade/Material combination workbook is embedded at: data/Trade_Material_Combinations.xlsx. "
-               "You may upload a replacement for this session if needed.")
-
-    combo_upload = st.file_uploader("Upload Trade_Material_Combinations.xlsx (optional override)", type=["xlsx"], key="u_trade_combo")
-    if combo_upload:
-        st.session_state.trade_combo_bytes = combo_upload.getvalue()
-
-    # Decide workbook path: embedded file on disk; if override bytes, write temp to /tmp
-    workbook_path = TRADE_COMBO_DEFAULT_PATH
-    if st.session_state.trade_combo_bytes:
-        import tempfile
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
-        tmp.write(st.session_state.trade_combo_bytes)
-        tmp.flush()
-        workbook_path = tmp.name
+    st.caption("Trade/Material combination workbook is embedded at: data/Trade_Material_Combinations.xlsx")
 
     if st.session_state.step4_d_df is None or st.session_state.step4_d_df.empty:
         st.error("Step 4 Output D is missing/empty.")
         st.stop()
 
+    if st.session_state.step5_df is None or st.session_state.step5_df.empty:
+        st.error("Step 5 output is missing/empty. Step 6 requires SAP Material mapping.")
+        st.stop()
+
     if st.button("Generate Sundries & Labor", type="primary"):
-        st.session_state.step6_df = build_step6_output(st.session_state.step4_d_df, workbook_path)
+        st.session_state.step6_df = build_step6_output(
+            output_d=st.session_state.step4_d_df,
+            step5_df=st.session_state.step5_df,
+            workbook_path=TRADE_COMBO_DEFAULT_PATH,
+        )
 
     if st.session_state.step6_df is None:
         st.info("Click 'Generate Sundries & Labor' to create the Step 6 output.")
