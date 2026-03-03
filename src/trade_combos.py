@@ -5,6 +5,7 @@ import openpyxl
 
 from src.formula_eval import eval_excel_formula
 
+
 @dataclass
 class ComboLine:
     trade: str
@@ -13,6 +14,7 @@ class ComboLine:
     qty: float
     uom: str
     material_type: str
+
 
 def _infer_type(material: Any, desc: str) -> str:
     d = (desc or "").upper()
@@ -27,14 +29,25 @@ def _infer_type(material: Any, desc: str) -> str:
         pass
     return "Sundry"
 
+
 def generate_associated_lines(
     workbook_path: str,
     trade_key: str,
-    installation_material_desc: str,
-    gross_qty: float,
-    gross_uom: str,
+    installation_gross_qty: float,
+    installation_uom: str,
+    installation_sap_material: str = "Installation Material",
+    installation_sap_description: str = "",
     sheet_name_map: Optional[Dict[str, str]] = None,
 ) -> List[ComboLine]:
+    """
+    Reads Trade_Material_Combinations.xlsx for the given trade and returns all associated
+    sundries/labor lines plus a single "installation material" line.
+
+    The "installation material" line is detected by the worksheet row whose
+    SAP MATERIAL/LABOR NUMBER cell contains 'INSTALL' (case-insensitive). That row's
+    quantity is replaced with installation_gross_qty, and its material/description are
+    replaced with (installation_sap_material, installation_sap_description).
+    """
     sheet_name_map = sheet_name_map or {
         "CARPET": "CARPET",
         "LVP": "LVP.EVP",
@@ -62,7 +75,11 @@ def generate_associated_lines(
     actual_qty_col = col_idx("ACTUAL QUANTITY")
     uom_col = col_idx("UOM")
 
-    desc_cols = [i+1 for i, v in enumerate(header) if isinstance(v, str) and v.strip().upper() == "MATERIAL/LABOR DESCRIPTION"]
+    desc_cols = [
+        i + 1
+        for i, v in enumerate(header)
+        if isinstance(v, str) and v.strip().upper() == "MATERIAL/LABOR DESCRIPTION"
+    ]
     desc_col = max(desc_cols) if desc_cols else None
     if not desc_col:
         raise ValueError("No MATERIAL/LABOR DESCRIPTION column found")
@@ -87,11 +104,11 @@ def generate_associated_lines(
         is_install_row = isinstance(material, str) and "INSTALL" in material.upper()
 
         if is_install_row:
-            qty = float(gross_qty)
+            qty = float(installation_gross_qty)
             mat_type = "Installation Material"
-            material_out = "Installation Material"
-            desc_out = str(installation_material_desc or "")
-            uom_out = str(gross_uom or uom or "")
+            material_out = str(installation_sap_material or "Installation Material")
+            desc_out = str(installation_sap_description or "")
+            uom_out = str(installation_uom or uom or "")
         else:
             qty = None
             if isinstance(aq, (int, float)):
