@@ -108,11 +108,6 @@ def apply_step3_merge_v2(
         })
 
     outB = pd.DataFrame(outB_rows)
-
-    # Hide rows where Transition Needed == "No"
-    if not outB.empty and "Transition Needed" in outB.columns:
-        outB = outB[~outB["Transition Needed"].str.strip().str.upper().eq("NO")]
-
     outB = outB.reset_index(drop=True)
 
     return outA, outB
