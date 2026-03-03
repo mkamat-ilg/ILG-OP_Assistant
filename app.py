@@ -315,7 +315,7 @@ if st.session_state.step_idx == 3:
             column_config={
                 "Trade": st.column_config.SelectboxColumn(
                     "Trade",
-                    options=["Carpet", "Tile", "LVP", "Vinyl", "Wood"],
+                    options=["Carpet", "Tile", "LVP", "Vinyl", "Wood", "Non Flooring"],
                     required=True,
                 )
             },
