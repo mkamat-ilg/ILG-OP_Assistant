@@ -232,6 +232,13 @@ if st.session_state.step_idx == 3:
             num_rows="dynamic",
             use_container_width=True,
             key="step3_a_editor",
+            column_config={
+                "Trade": st.column_config.SelectboxColumn(
+                    "Trade",
+                    options=["Carpet", "Tile", "LVP", "Vinyl", "Wood"],
+                    required=True,
+                )
+            },
         )
 
     # Recompute Output B based on any edits in Output A.
