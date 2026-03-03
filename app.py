@@ -100,6 +100,50 @@ def _overall_elapsed_seconds() -> float:
     return float(end - st.session_state.run_start_perf)
 
 
+
+def _render_timers_every_screen() -> None:
+    """Render overall + per-section timers in the main page for every step."""
+    _ensure_timer_state()
+
+    # Compact always-on header
+    st.divider()
+    st.subheader("Timers")
+
+    overall = _overall_elapsed_seconds()
+    c1, c2 = st.columns([1, 2])
+
+    with c1:
+        st.metric("Overall elapsed", _fmt_seconds(overall))
+        if st.session_state.run_start_perf is None:
+            st.caption("Starts on first processing action.")
+        elif st.session_state.run_end_perf is None:
+            st.caption("Running…")
+        else:
+            st.caption("Stopped.")
+
+    with c2:
+        with st.expander("Time spent per section", expanded=True):
+            if st.session_state.section_totals:
+                items = []
+                for k in sorted(st.session_state.section_totals.keys()):
+                    total = float(st.session_state.section_totals.get(k, 0.0))
+                    last = float(st.session_state.section_durations.get(k, 0.0))
+                    items.append({"Section": k, "Total": _fmt_seconds(total), "Last run": _fmt_seconds(last)})
+                df = pd.DataFrame(items)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+            else:
+                st.caption("No section timings recorded yet.")
+
+            col_reset, col_spacer = st.columns([1, 3])
+            with col_reset:
+                if st.button("Reset timers", key="reset_timers_everywhere"):
+                    st.session_state.run_start_perf = None
+                    st.session_state.run_end_perf = None
+                    st.session_state.section_durations = {}
+                    st.session_state.section_totals = {}
+                    st.rerun()
+
+
 def _load_local_file(path: str) -> dict:
     with open(path, "rb") as f:
         b = f.read()
@@ -166,36 +210,13 @@ with st.sidebar:
         if st.button(f"{done} {label}", use_container_width=True, disabled=disabled):
             go(i)
 
+
+# Timers visible on every screen
+_render_timers_every_screen()
+
 # Step 0
 if st.session_state.step_idx == 0:
-    st.divider()
-    st.subheader("Run timers")
-    _ensure_timer_state()
-    overall = _overall_elapsed_seconds()
-    st.metric("Overall elapsed", _fmt_seconds(overall))
-    if st.session_state.run_start_perf is None:
-        st.caption("Overall timer starts when you click a processing button (extraction/matching/generation).")
-    elif st.session_state.run_end_perf is None:
-        st.caption("Overall timer is running…")
-    else:
-        st.caption("Overall timer stopped (export built or order marked complete).")
 
-    if st.session_state.section_totals:
-        # Show cumulative totals (most meaningful for a full run)
-        items = sorted(st.session_state.section_totals.items(), key=lambda kv: kv[0])
-        for k, v in items:
-            last = st.session_state.section_durations.get(k, 0.0)
-            st.write(f"- **{k}**: total {_fmt_seconds(v)} (last {_fmt_seconds(last)})")
-    else:
-        st.caption("No section timings yet.")
-
-    cta = st.button("Reset timers", use_container_width=True)
-    if cta:
-        st.session_state.run_start_perf = None
-        st.session_state.run_end_perf = None
-        st.session_state.section_durations = {}
-        st.session_state.section_totals = {}
-        st.rerun()
 
     st.header("Please Upload Selection Sheet and Floorplan to get started")
 
