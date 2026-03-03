@@ -211,15 +211,14 @@ if st.session_state.step_idx == 3:
     require_verified(2)
     st.header("Step 3 – Consolidated Summary of Rooms, Trades & Transitions required")
 
-    step1 = st.session_state.step1_df.copy() if st.session_state.step1_df is not None else pd.DataFrame(
-        columns=["Room", "Trade", "Material Description"]
-    )
-    rooms = st.session_state.step2_rooms_df.copy() if st.session_state.step2_rooms_df is not None else pd.DataFrame(
-        columns=["Room"]
-    )
-    trans = st.session_state.step2_trans_df.copy() if st.session_state.step2_trans_df is not None else pd.DataFrame(
-        columns=["Room", "Adjoining Room", "Transition needed"]
-    )
+    step1 = st.session_state.get("step1_df")
+    step1 = step1.copy() if step1 is not None else pd.DataFrame(columns=["Room", "Trade", "Material Description"])
+
+    rooms = st.session_state.get("step2_rooms_df")
+    rooms = rooms.copy() if rooms is not None else pd.DataFrame(columns=["Room"])
+
+    trans = st.session_state.get("step2_trans_df")
+    trans = trans.copy() if trans is not None else pd.DataFrame(columns=["Room", "Adjoining Room", "Transition needed"])
 
     if rooms.empty:
         st.error("Rooms list is empty. Go back to Step 2.")
@@ -233,15 +232,16 @@ if st.session_state.step_idx == 3:
     with c1:
         st.markdown("**Output A:** Room (from Step 2) | Trade | Material Description")
 
-        if st.session_state.step3_a_df is None or st.session_state.step3_a_df.empty:
-            st.session_state.step3_a_df = outA_init
+        step3_a_df = st.session_state.get("step3_a_df")
+        if step3_a_df is None or step3_a_df.empty:
+            st.session_state["step3_a_df"] = outA_init
 
         def _on_step3_a_change() -> None:
             # Ensure dependent computations (Output B) see the latest edits in the same rerun
-            st.session_state.step3_a_df = st.session_state.get("step3_a_editor", st.session_state.step3_a_df)
+            st.session_state["step3_a_df"] = st.session_state.get("step3_a_editor", st.session_state.get("step3_a_df"))
 
         edited_a = st.data_editor(
-            st.session_state.step3_a_df,
+            st.session_state.get("step3_a_df"),
             num_rows="dynamic",
             use_container_width=True,
             key="step3_a_editor",
@@ -254,7 +254,7 @@ if st.session_state.step_idx == 3:
                 )
             },
         )
-        st.session_state.step3_a_df = edited_a
+        st.session_state["step3_a_df"] = edited_a
 
     # Helpers
     def _norm_room(s: str) -> str:
@@ -279,15 +279,12 @@ if st.session_state.step_idx == 3:
         return t
 
     # Compute Output B from Output A + Step 2 adjacency
-    a_df = st.session_state.step3_a_df.copy() if st.session_state.step3_a_df is not None else pd.DataFrame(
-        columns=["Room", "Trade", "Material Description"]
-    )
-    trade_map = {
-        _norm_room(r): _trade_key(t)
-        for r, t in zip(a_df.get("Room", []), a_df.get("Trade", []))
-    }
+    a_df_src = st.session_state.get("step3_a_df")
+    a_df = a_df_src.copy() if a_df_src is not None else pd.DataFrame(columns=["Room", "Trade", "Material Description"])
 
-    if trans is None or trans.empty:
+    trade_map = {_norm_room(r): _trade_key(t) for r, t in zip(a_df.get("Room", []), a_df.get("Trade", []))}
+
+    if trans.empty:
         outB_full = pd.DataFrame(
             columns=["Room", "Adjoining Room", "Trade In Room", "Trade In Adjoining Room", "Transition Needed"]
         )
@@ -300,11 +297,9 @@ if st.session_state.step_idx == 3:
             tk_room = trade_map.get(_norm_room(room), "")
             tk_adj = trade_map.get(_norm_room(adj), "")
 
-            # Display values
             tk_room_disp = tk_room.title() if tk_room and tk_room != "LVP" else ("LVP" if tk_room == "LVP" else "")
             tk_adj_disp = tk_adj.title() if tk_adj and tk_adj != "LVP" else ("LVP" if tk_adj == "LVP" else "")
 
-            # Transition needed when trades DON'T match
             need = "Yes" if _norm_room(tk_room_disp) != _norm_room(tk_adj_disp) else "No"
 
             outB_rows.append(
@@ -319,7 +314,7 @@ if st.session_state.step_idx == 3:
         outB_full = pd.DataFrame(outB_rows)
 
     # Store full computed Output B in state for downstream steps
-    st.session_state.step3_b_df = outB_full
+    st.session_state["step3_b_df"] = outB_full
 
     with c2:
         st.markdown("**Output B:** Room | Adjoining Room | Trade In Room | Trade In Adjoining Room | Transition Needed")
