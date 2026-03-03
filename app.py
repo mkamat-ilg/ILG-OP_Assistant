@@ -10,6 +10,38 @@ from src.step5_utils import load_material_master, match_materials
 from src.step6_utils import build_step6_output
 from src.export_utils import build_export_workbook
 
+# --------------------------------------------------
+# Canonical Room → Trade Mapping (Normalization Safe)
+# --------------------------------------------------
+
+def _norm_room(s: str) -> str:
+    if s is None:
+        return ""
+    return " ".join(str(s).strip().upper().split())
+
+
+ROOM_TRADE_MAP = {
+    "Great Room": "LVP",
+    "Kitchen": "LVP",
+    "Pantry": "LVP",
+    "Storage": "Non Flooring",
+    "Garage": "Non Flooring",
+    "Foyer": "Non Flooring",
+    "Entry": "LVP",
+    "Powder": "LVP",
+    "Loft": "LVP",
+    "Laundry": "LVP",
+    "Bath 1": "LVP",
+    "Bath 2": "LVP",
+    "Bedroom 1": "Carpet",
+    "Bedroom 2": "Carpet",
+    "Bedroom 3": "Carpet",
+    "Bedroom 4": "Carpet",
+    "BR1 WIC": "Carpet",
+}
+
+ROOM_TRADE_MAP_NORM = {_norm_room(k): v for k, v in ROOM_TRADE_MAP.items()}
+
 APP_TITLE = "Order Processing Assistant"
 TAKEOFF_DEFAULT_PATH = os.path.join("data", "ELSTON II - Takeoff.xlsx")
 MATERIAL_MASTER_DEFAULT_PATH = os.path.join("data", "Material_Description.xlsx")
@@ -292,6 +324,21 @@ if st.session_state.step_idx == 3:
 
     # Initial build (3A removed).
     outA_init, _ = apply_step3_merge_v2(step1, rooms, trans)
+
+    # --------------------------------------------------
+    # Enforce canonical Room → Trade mapping (normalization-safe)
+    # --------------------------------------------------
+    if not outA_init.empty and "Room" in outA_init.columns:
+        outA_init["Room_norm"] = outA_init["Room"].map(_norm_room)
+        outA_init["Trade"] = outA_init.apply(
+            lambda r: ROOM_TRADE_MAP_NORM.get(r["Room_norm"], r.get("Trade", "")),
+            axis=1,
+        )
+        outA_init.drop(columns=["Room_norm"], inplace=True)
+
+    # Remove Non Flooring rows from installation workflow (recommended)
+    if "Trade" in outA_init.columns:
+        outA_init = outA_init[~outA_init["Trade"].astype(str).str.strip().str.upper().eq("NON FLOORING")].reset_index(drop=True)
 
     c1, c2 = st.columns(2)
 
