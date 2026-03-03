@@ -262,16 +262,6 @@ if st.session_state.step_idx == 3:
     a_df = st.session_state.step3_a_df.copy() if st.session_state.step3_a_df is not None else pd.DataFrame(columns=["Room","Trade","Material Description"])
     trade_map = { _norm_room(r): _trade_key(t) for r, t in zip(a_df.get("Room", []), a_df.get("Trade", [])) }
 
-    # Preserve any user edits to Transition Needed by matching (Room, Adjoining Room).
-    prev_full = st.session_state.step3_b_df.copy() if st.session_state.step3_b_df is not None else pd.DataFrame(
-        columns=["Room","Adjoining Room","Trade In Room","Trade In Adjoining Room","Transition Needed"]
-    )
-    prev_need = {}
-    if not prev_full.empty:
-        for _, rr in prev_full.iterrows():
-            k = (_norm_room(rr.get("Room","")), _norm_room(rr.get("Adjoining Room","")))
-            prev_need[k] = str(rr.get("Transition Needed",""))
-
     if trans is None or trans.empty:
         outB_full = pd.DataFrame(columns=["Room","Adjoining Room","Trade In Room","Trade In Adjoining Room","Transition Needed"])
     else:
@@ -283,8 +273,7 @@ if st.session_state.step_idx == 3:
             tk_adj = trade_map.get(_norm_room(adj), "")
             tk_room_disp = tk_room.title() if tk_room and tk_room != "LVP" else ("LVP" if tk_room == "LVP" else "")
             tk_adj_disp = tk_adj.title() if tk_adj and tk_adj != "LVP" else ("LVP" if tk_adj == "LVP" else "")
-            k = (_norm_room(room), _norm_room(adj))
-            need = prev_need.get(k, str(tr.get("Transition needed", "")))
+            need = "Yes" if _norm_room(tk_room_disp) != _norm_room(tk_adj_disp) else "No"
             outB_rows.append({
                 "Room": room,
                 "Adjoining Room": adj,
@@ -293,6 +282,9 @@ if st.session_state.step_idx == 3:
                 "Transition Needed": need,
             })
         outB_full = pd.DataFrame(outB_rows)
+
+    # Output B is computed; keep full table in session_state
+    st.session_state.step3_b_df = outB_full
 
     with c2:
         st.markdown("**Output B:** Room | Adjoining Room | Trade In Room | Trade In Adjoining Room | Transition Needed")
@@ -309,33 +301,10 @@ if st.session_state.step_idx == 3:
             num_rows="dynamic",
             use_container_width=True,
             key="step3_b_editor",
+            disabled=["Trade In Room", "Trade In Adjoining Room", "Transition Needed"],
         )
-
-        # Merge any edits from the displayed rows back into the full dataset
-        if outB_full.empty:
-            st.session_state.step3_b_df = edited_display
-        else:
-            full = outB_full.copy()
-            # Build index for full rows by (Room, Adjoining Room)
-            full_idx = {(_norm_room(r), _norm_room(a)): i for i, (r, a) in enumerate(zip(full["Room"], full["Adjoining Room"]))}
-            # Apply edits
-            for _, row in edited_display.iterrows():
-                k = (_norm_room(row.get("Room","")), _norm_room(row.get("Adjoining Room","")))
-                if k in full_idx:
-                    i = full_idx[k]
-                    for col in ["Trade In Room","Trade In Adjoining Room","Transition Needed"]:
-                        if col in row:
-                            full.at[i, col] = row.get(col, full.at[i, col])
-                else:
-                    # New row added in editor; append it to full
-                    full = pd.concat([full, pd.DataFrame([{
-                        "Room": row.get("Room",""),
-                        "Adjoining Room": row.get("Adjoining Room",""),
-                        "Trade In Room": row.get("Trade In Room",""),
-                        "Trade In Adjoining Room": row.get("Trade In Adjoining Room",""),
-                        "Transition Needed": row.get("Transition Needed",""),
-                    }])], ignore_index=True)
-            st.session_state.step3_b_df = full
+        # Output B is computed; store the full (unfiltered) table
+        st.session_state.step3_b_df = outB_full
 
     st.divider()
     if st.button("I have verified the Rooms & Transitions. Move to Step 4", type="primary"):
