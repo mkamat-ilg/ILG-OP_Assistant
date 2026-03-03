@@ -2,9 +2,9 @@ import os
 import streamlit as st
 import pandas as pd
 
-from src.pdf_utils import pdf_bytes_to_images, image_bytes_to_images, render_doc_viewer
+from src.pdf_utils import pdf_bytes_to_images, image_bytes_to_images, render_doc_viewer, render_doc_viewer_container
 from src.openai_client import extract_step1_builder_selections, extract_step2_rooms_transitions
-from src.merge_utils import build_room_category_map, apply_step3_merge
+from src.merge_utils import apply_step3_merge_v2
 from src.step4_utils import load_takeoff, build_step4_outputs
 from src.step5_utils import load_material_master, match_materials
 from src.step6_utils import build_step6_output
@@ -109,7 +109,7 @@ if st.session_state.step_idx == 1:
 
     with right:
         st.subheader("Selection Sheet (scroll + zoom for verification)")
-        render_doc_viewer(sel_file, key_prefix="sel_view")
+        render_doc_viewer_container(sel_file, key_prefix="sel_view", height_px=720)
 
     with left:
         st.subheader("Extracted output (editable)")
@@ -146,7 +146,7 @@ if st.session_state.step_idx == 2:
 
     with right:
         st.subheader("Floorplan (scroll + zoom for verification)")
-        render_doc_viewer(fp_file, key_prefix="fp_view")
+        render_doc_viewer_container(fp_file, key_prefix="fp_view", height_px=720)
 
     with left:
         st.subheader("Rooms (editable)")
@@ -167,9 +167,38 @@ if st.session_state.step_idx == 2:
                 st.session_state.step2_rooms_df = pd.DataFrame(columns=["Room"])
                 st.session_state.step2_trans_df = pd.DataFrame(columns=["Room","Adjoining Room","Transition needed"])
 
-        st.session_state.step2_rooms_df = st.data_editor(st.session_state.step2_rooms_df, num_rows="dynamic", use_container_width=True, key="step2_rooms_editor")
+        st.session_state.step2_rooms_df = st.data_editor(
+            st.session_state.step2_rooms_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="step2_rooms_editor",
+        )
+
+        # Keep transitions aligned to the Rooms list (authoritative).
+        rooms_list = [str(r).strip() for r in st.session_state.step2_rooms_df.get("Room", pd.Series(dtype=str)).tolist()]
+        rooms_list = [r for r in rooms_list if r]
+
+        if rooms_list:
+            # Drop transitions referencing removed rooms.
+            tdf = st.session_state.step2_trans_df.copy()
+            for c in ["Room", "Adjoining Room", "Transition needed"]:
+                if c in tdf.columns:
+                    tdf[c] = tdf[c].astype(str)
+            if not tdf.empty:
+                tdf = tdf[tdf["Room"].isin(rooms_list) & tdf["Adjoining Room"].isin(rooms_list)].copy()
+            st.session_state.step2_trans_df = tdf
+
         st.subheader("Room | Adjoining Room | Transition needed (editable)")
-        st.session_state.step2_trans_df = st.data_editor(st.session_state.step2_trans_df, num_rows="dynamic", use_container_width=True, key="step2_trans_editor")
+        st.session_state.step2_trans_df = st.data_editor(
+            st.session_state.step2_trans_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="step2_trans_editor",
+            column_config={
+                "Room": st.column_config.SelectboxColumn("Room", options=rooms_list or []),
+                "Adjoining Room": st.column_config.SelectboxColumn("Adjoining Room", options=rooms_list or []),
+            },
+        )
 
         st.divider()
         if st.button("I have verified the Rooms. Move to Step 3", type="primary"):
@@ -190,27 +219,73 @@ if st.session_state.step_idx == 3:
         st.error("Rooms list is empty. Go back to Step 2.")
         st.stop()
 
-    st.subheader("3A. Room → Category mapping (editable)")
-    if st.session_state.room_category_map_df is None or st.session_state.room_category_map_df.empty:
-        st.session_state.room_category_map_df = build_room_category_map(rooms)
-
-    st.session_state.room_category_map_df = st.data_editor(st.session_state.room_category_map_df, num_rows="dynamic", use_container_width=True, key="room_cat_map_editor")
-
-    outA, outB, diagnostics = apply_step3_merge(step1, rooms, trans, st.session_state.room_category_map_df)
+    # Initial build (3A removed).
+    outA_init, outB_init = apply_step3_merge_v2(step1, rooms, trans)
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("**Output A:** Room (from Step 2) | Trade | Material Description")
-        st.session_state.step3_a_df = st.session_state.step3_a_df if st.session_state.step3_a_df is not None else outA
-        st.session_state.step3_a_df = st.data_editor(st.session_state.step3_a_df, num_rows="dynamic", use_container_width=True, key="step3_a_editor")
-    with c2:
-        st.markdown("**Output B:** Room | Adjoining Room | Trade | Transition needed")
-        st.session_state.step3_b_df = st.session_state.step3_b_df if st.session_state.step3_b_df is not None else outB
-        st.session_state.step3_b_df = st.data_editor(st.session_state.step3_b_df, num_rows="dynamic", use_container_width=True, key="step3_b_editor")
+        st.markdown("**Output A:** Room (from Step 2) | Trade (from Step 1) | Material Description")
+        if st.session_state.step3_a_df is None or st.session_state.step3_a_df.empty:
+            st.session_state.step3_a_df = outA_init
+        st.session_state.step3_a_df = st.data_editor(
+            st.session_state.step3_a_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="step3_a_editor",
+        )
 
-    st.divider()
-    st.subheader("Diagnostics")
-    st.dataframe(diagnostics, use_container_width=True)
+    # Recompute Output B based on any edits in Output A.
+    def _norm_room(s: str) -> str:
+        import re
+        s = "" if s is None else str(s)
+        s = s.strip().upper()
+        s = re.sub(r"\s+", " ", s)
+        return s
+
+    def _trade_key(trade: str) -> str:
+        t = _norm_room(trade)
+        if "CARPET" in t:
+            return "CARPET"
+        if "LVP" in t or "EVP" in t:
+            return "LVP"
+        if "TILE" in t:
+            return "TILE"
+        return t
+
+    a_df = st.session_state.step3_a_df.copy() if st.session_state.step3_a_df is not None else pd.DataFrame(columns=["Room","Trade","Material Description"])
+    trade_map = { _norm_room(r): _trade_key(t) for r, t in zip(a_df.get("Room", []), a_df.get("Trade", [])) }
+
+    # Preserve any user edits to Transition needed by matching (Room, Adjoining Room).
+    prev_b = st.session_state.step3_b_df.copy() if st.session_state.step3_b_df is not None else pd.DataFrame(columns=["Room","Adjoining Room","Trade","Transition needed"])
+    prev_need = {}
+    if not prev_b.empty:
+        for _, rr in prev_b.iterrows():
+            k = (_norm_room(rr.get("Room","")), _norm_room(rr.get("Adjoining Room","")))
+            prev_need[k] = str(rr.get("Transition needed",""))
+
+    if trans is None or trans.empty:
+        outB = pd.DataFrame(columns=["Room","Adjoining Room","Trade","Transition needed"])
+    else:
+        outB_rows = []
+        for _, tr in trans.iterrows():
+            room = str(tr.get("Room", ""))
+            adj = str(tr.get("Adjoining Room", ""))
+            tk = trade_map.get(_norm_room(room), "")
+            tk_disp = tk.title() if tk and tk != "LVP" else ("LVP" if tk == "LVP" else "")
+            k = (_norm_room(room), _norm_room(adj))
+            need = prev_need.get(k, str(tr.get("Transition needed", "")))
+            outB_rows.append({"Room": room, "Adjoining Room": adj, "Trade": tk_disp, "Transition needed": need})
+        outB = pd.DataFrame(outB_rows)
+
+    with c2:
+        st.markdown("**Output B:** Room | Adjoining Room | Trade (from Output A) | Transition needed")
+        st.session_state.step3_b_df = outB
+        st.session_state.step3_b_df = st.data_editor(
+            st.session_state.step3_b_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="step3_b_editor",
+        )
 
     st.divider()
     if st.button("I have verified the Rooms & Transitions. Move to Step 4", type="primary"):
