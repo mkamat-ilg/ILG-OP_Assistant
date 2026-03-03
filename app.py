@@ -2,7 +2,7 @@ import os
 import streamlit as st
 import pandas as pd
 
-from src.pdf_utils import pdf_bytes_to_images, image_bytes_to_images, render_doc_viewer, render_doc_viewer_container
+from src.pdf_utils import pdf_bytes_to_images, image_bytes_to_images, render_doc_viewer_container
 from src.openai_client import extract_step1_builder_selections, extract_step2_rooms_transitions
 from src.merge_utils import apply_step3_merge_v2
 from src.step4_utils import load_takeoff, build_step4_outputs
@@ -15,9 +15,12 @@ TAKEOFF_DEFAULT_PATH = os.path.join("data", "ELSTON II - Takeoff.xlsx")
 MATERIAL_MASTER_DEFAULT_PATH = os.path.join("data", "Material_Description.xlsx")
 TRADE_COMBO_DEFAULT_PATH = os.path.join("data", "Trade_Material_Combinations.xlsx")
 
+
 def init_state():
     st.session_state.setdefault("step_idx", 0)
-    st.session_state.setdefault("verified", {0: False, 1: False, 2: False, 3: False, 4: False, 5: False, 6: False, 7: False})
+    st.session_state.setdefault(
+        "verified", {0: False, 1: False, 2: False, 3: False, 4: False, 5: False, 6: False, 7: False}
+    )
 
     st.session_state.setdefault("selection_file", None)
     st.session_state.setdefault("floorplan_file", None)
@@ -28,31 +31,32 @@ def init_state():
 
     st.session_state.setdefault("step3_a_df", None)
     st.session_state.setdefault("step3_b_df", None)
-    st.session_state.setdefault("room_category_map_df", None)
 
-    st.session_state.setdefault("takeoff_bytes", None)
+    # Embedded sources (no upload overrides for Steps 4-6 per requirements)
     st.session_state.setdefault("takeoff_df", None)
+    st.session_state.setdefault("material_master_df", None)
 
     st.session_state.setdefault("step4_c_df", None)
     st.session_state.setdefault("step4_d_df", None)
 
-    st.session_state.setdefault("material_master_bytes", None)
-    st.session_state.setdefault("material_master_df", None)
     st.session_state.setdefault("step5_df", None)
-    st.session_state.setdefault("trade_combo_bytes", None)
     st.session_state.setdefault("step6_df", None)
     st.session_state.setdefault("export_xlsx_bytes", None)
 
+
 init_state()
+
 
 def go(step: int):
     st.session_state.step_idx = step
     st.rerun()
 
+
 def require_verified(step: int):
     if not st.session_state.verified.get(step, False):
         st.error(f"You must verify Step {step} before proceeding.")
         st.stop()
+
 
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 st.title(APP_TITLE)
@@ -71,7 +75,7 @@ with st.sidebar:
     ]
     for i, label in enumerate(labels):
         done = "✅" if st.session_state.verified.get(i) else "⬜"
-        disabled = (i > 0 and not st.session_state.verified.get(i-1, False))
+        disabled = i > 0 and not st.session_state.verified.get(i - 1, False)
         if st.button(f"{done} {label}", use_container_width=True, disabled=disabled):
             go(i)
 
@@ -81,14 +85,24 @@ if st.session_state.step_idx == 0:
 
     c1, c2 = st.columns(2)
     with c1:
-        sel = st.file_uploader("Upload Selection Sheet (PDF/image preferred)", type=["pdf","png","jpg","jpeg"], key="u_sel")
+        sel = st.file_uploader(
+            "Upload Selection Sheet (PDF/image preferred)", type=["pdf", "png", "jpg", "jpeg"], key="u_sel"
+        )
         if sel:
-            st.session_state.selection_file = {"name": sel.name, "ext": sel.name.split(".")[-1].lower(), "bytes": sel.getvalue()}
+            st.session_state.selection_file = {
+                "name": sel.name,
+                "ext": sel.name.split(".")[-1].lower(),
+                "bytes": sel.getvalue(),
+            }
 
     with c2:
-        fp = st.file_uploader("Upload Floorplan (PDF/image preferred)", type=["pdf","png","jpg","jpeg"], key="u_fp")
+        fp = st.file_uploader("Upload Floorplan (PDF/image preferred)", type=["pdf", "png", "jpg", "jpeg"], key="u_fp")
         if fp:
-            st.session_state.floorplan_file = {"name": fp.name, "ext": fp.name.split(".")[-1].lower(), "bytes": fp.getvalue()}
+            st.session_state.floorplan_file = {
+                "name": fp.name,
+                "ext": fp.name.split(".")[-1].lower(),
+                "bytes": fp.getvalue(),
+            }
 
     if st.session_state.selection_file and st.session_state.floorplan_file:
         st.success("Both required documents uploaded.")
@@ -121,14 +135,20 @@ if st.session_state.step_idx == 1:
         colA, colB = st.columns([1, 1])
         with colA:
             if st.button("Run OpenAI extraction", type="primary"):
-                imgs = pdf_bytes_to_images(sel_file["bytes"]) if sel_file["ext"] == "pdf" else image_bytes_to_images(sel_file["bytes"])
+                imgs = (
+                    pdf_bytes_to_images(sel_file["bytes"])
+                    if sel_file["ext"] == "pdf"
+                    else image_bytes_to_images(sel_file["bytes"])
+                )
                 rows = extract_step1_builder_selections(imgs)
                 st.session_state.step1_df = pd.DataFrame(rows, columns=["Room", "Trade", "Material Description"])
         with colB:
             if st.button("Reset table"):
                 st.session_state.step1_df = pd.DataFrame(columns=["Room", "Trade", "Material Description"])
 
-        st.session_state.step1_df = st.data_editor(st.session_state.step1_df, num_rows="dynamic", use_container_width=True, key="step1_editor")
+        st.session_state.step1_df = st.data_editor(
+            st.session_state.step1_df, num_rows="dynamic", use_container_width=True, key="step1_editor"
+        )
 
         st.divider()
         if st.button("I have verified the Builder Selections. Move to Step 2", type="primary"):
@@ -153,19 +173,23 @@ if st.session_state.step_idx == 2:
         if st.session_state.step2_rooms_df is None:
             st.session_state.step2_rooms_df = pd.DataFrame(columns=["Room"])
         if st.session_state.step2_trans_df is None:
-            st.session_state.step2_trans_df = pd.DataFrame(columns=["Room","Adjoining Room","Transition needed"])
+            st.session_state.step2_trans_df = pd.DataFrame(columns=["Room", "Adjoining Room", "Transition needed"])
 
         colA, colB = st.columns([1, 1])
         with colA:
             if st.button("Run OpenAI extraction", type="primary"):
-                imgs = pdf_bytes_to_images(fp_file["bytes"]) if fp_file["ext"] == "pdf" else image_bytes_to_images(fp_file["bytes"])
+                imgs = (
+                    pdf_bytes_to_images(fp_file["bytes"])
+                    if fp_file["ext"] == "pdf"
+                    else image_bytes_to_images(fp_file["bytes"])
+                )
                 rooms, transitions = extract_step2_rooms_transitions(imgs)
                 st.session_state.step2_rooms_df = pd.DataFrame(rooms, columns=["Room"])
-                st.session_state.step2_trans_df = pd.DataFrame(transitions, columns=["Room","Adjoining Room","Transition needed"])
+                st.session_state.step2_trans_df = pd.DataFrame(transitions, columns=["Room", "Adjoining Room", "Transition needed"])
         with colB:
             if st.button("Reset outputs"):
                 st.session_state.step2_rooms_df = pd.DataFrame(columns=["Room"])
-                st.session_state.step2_trans_df = pd.DataFrame(columns=["Room","Adjoining Room","Transition needed"])
+                st.session_state.step2_trans_df = pd.DataFrame(columns=["Room", "Adjoining Room", "Transition needed"])
 
         st.session_state.step2_rooms_df = st.data_editor(
             st.session_state.step2_rooms_df,
@@ -179,7 +203,6 @@ if st.session_state.step_idx == 2:
         rooms_list = [r for r in rooms_list if r]
 
         if rooms_list:
-            # Drop transitions referencing removed rooms.
             tdf = st.session_state.step2_trans_df.copy()
             for c in ["Room", "Adjoining Room", "Transition needed"]:
                 if c in tdf.columns:
@@ -224,7 +247,6 @@ if st.session_state.step_idx == 3:
         st.error("Rooms list is empty. Go back to Step 2.")
         st.stop()
 
-    # Initial build (3A removed).
     outA_init, _ = apply_step3_merge_v2(step1, rooms, trans)
 
     c1, c2 = st.columns(2)
@@ -237,7 +259,6 @@ if st.session_state.step_idx == 3:
             st.session_state["step3_a_df"] = outA_init
 
         def _on_step3_a_change() -> None:
-            # Ensure dependent computations (Output B) see the latest edits in the same rerun
             st.session_state["step3_a_df"] = st.session_state.get("step3_a_editor", st.session_state.get("step3_a_df"))
 
         edited_a = st.data_editor(
@@ -259,6 +280,7 @@ if st.session_state.step_idx == 3:
     # Helpers
     def _norm_room(s: str) -> str:
         import re as _re
+
         s = "" if s is None else str(s)
         s = s.strip().upper()
         s = _re.sub(r"\s+", " ", s)
@@ -285,9 +307,7 @@ if st.session_state.step_idx == 3:
     trade_map = {_norm_room(r): _trade_key(t) for r, t in zip(a_df.get("Room", []), a_df.get("Trade", []))}
 
     if trans.empty:
-        outB_full = pd.DataFrame(
-            columns=["Room", "Adjoining Room", "Trade In Room", "Trade In Adjoining Room", "Transition Needed"]
-        )
+        outB_full = pd.DataFrame(columns=["Room", "Adjoining Room", "Trade In Room", "Trade In Adjoining Room", "Transition Needed"])
     else:
         outB_rows = []
         for _, tr in trans.iterrows():
@@ -313,7 +333,6 @@ if st.session_state.step_idx == 3:
             )
         outB_full = pd.DataFrame(outB_rows)
 
-    # Store full computed Output B in state for downstream steps
     st.session_state["step3_b_df"] = outB_full
 
     with c2:
@@ -323,9 +342,7 @@ if st.session_state.step_idx == 3:
 
         display_df = outB_full.copy()
         if hide_no and not display_df.empty:
-            display_df = display_df[
-                ~display_df["Transition Needed"].astype(str).str.strip().str.upper().eq("NO")
-            ].reset_index(drop=True)
+            display_df = display_df[~display_df["Transition Needed"].astype(str).str.strip().str.upper().eq("NO")].reset_index(drop=True)
 
         st.data_editor(
             display_df,
@@ -346,13 +363,10 @@ if st.session_state.step_idx == 4:
     require_verified(3)
     st.header("Step 4 – Let's get the Quantity to be ordered for Installation Materials as per TakeOff")
 
-    st.caption("Takeoff workbook is embedded with the app at: data/ELSTON II - Takeoff.xlsx. You can still upload a replacement for this session if needed.")
-    takeoff_upload = st.file_uploader("Upload ELSTON II - Takeoff.xlsx (if not preloaded)", type=["xlsx"], key="u_takeoff")
-    if takeoff_upload:
-        st.session_state.takeoff_bytes = takeoff_upload.getvalue()
+    st.caption("Gross Qty and UOM are loaded strictly from the embedded takeoff workbook: data/ELSTON II - Takeoff.xlsx")
 
     try:
-        st.session_state.takeoff_df = load_takeoff(TAKEOFF_DEFAULT_PATH, override_bytes=st.session_state.takeoff_bytes)
+        st.session_state.takeoff_df = load_takeoff(TAKEOFF_DEFAULT_PATH, override_bytes=None)
         st.success(f"Loaded takeoff rows: {len(st.session_state.takeoff_df)}")
     except Exception as e:
         st.error(f"Unable to load takeoff workbook. {e}")
@@ -362,20 +376,29 @@ if st.session_state.step_idx == 4:
         st.error("Step 3 Output A is missing/empty.")
         st.stop()
 
-    outC, outD, diag = build_step4_outputs(st.session_state.step3_a_df, st.session_state.takeoff_df)
+    if st.session_state.step1_df is None or st.session_state.step1_df.empty:
+        st.error("Step 1 output is missing/empty. Material Description must come from Selection Sheet.")
+        st.stop()
+
+    outC, outD = build_step4_outputs(
+        step3_a_df=st.session_state.step3_a_df,
+        step1_df=st.session_state.step1_df,
+        takeoff_df=st.session_state.takeoff_df,
+    )
 
     st.subheader("Output C (editable): Room | Trade | Gross Qty | UOM | Material Description")
     if st.session_state.step4_c_df is None:
         st.session_state.step4_c_df = outC
-    st.session_state.step4_c_df = st.data_editor(st.session_state.step4_c_df, num_rows="dynamic", use_container_width=True, key="step4_c_editor")
+    st.session_state.step4_c_df = st.data_editor(
+        st.session_state.step4_c_df, num_rows="dynamic", use_container_width=True, key="step4_c_editor"
+    )
 
     st.subheader("Output D (editable): Trade | Material Description | Gross Qty | UOM")
     if st.session_state.step4_d_df is None:
         st.session_state.step4_d_df = outD
-    st.session_state.step4_d_df = st.data_editor(st.session_state.step4_d_df, num_rows="dynamic", use_container_width=True, key="step4_d_editor")
-
-    st.subheader("Join diagnostics (unmatched Room/Trade)")
-    st.dataframe(diag, use_container_width=True)
+    st.session_state.step4_d_df = st.data_editor(
+        st.session_state.step4_d_df, num_rows="dynamic", use_container_width=True, key="step4_d_editor"
+    )
 
     st.divider()
     if st.button("I have verified the Quantities. Move to Step 5", type="primary"):
@@ -383,24 +406,15 @@ if st.session_state.step_idx == 4:
         go(5)
     st.stop()
 
-
 # Step 5
 if st.session_state.step_idx == 5:
     require_verified(4)
     st.header("Step 5 – Let's identify the SAP Materials")
 
-    st.caption("Material master is expected at: data/Material_Description.xlsx. "
-               "If not embedded yet, upload it below for this session. (Later we can embed it permanently.)")
-
-    mm_upload = st.file_uploader("Upload Material_Description.xlsx (if not embedded)", type=["xlsx"], key="u_mat_master")
-    if mm_upload:
-        st.session_state.material_master_bytes = mm_upload.getvalue()
+    st.caption("Material master is embedded at: data/Material_Description.xlsx")
 
     try:
-        st.session_state.material_master_df = load_material_master(
-            MATERIAL_MASTER_DEFAULT_PATH,
-            override_bytes=st.session_state.material_master_bytes
-        )
+        st.session_state.material_master_df = load_material_master(MATERIAL_MASTER_DEFAULT_PATH, override_bytes=None)
         st.success(f"Loaded material master rows: {len(st.session_state.material_master_df)}")
     except Exception as e:
         st.error(f"Unable to load material master workbook. {e}")
@@ -410,21 +424,13 @@ if st.session_state.step_idx == 5:
         st.error("Step 4 Output D is missing/empty.")
         st.stop()
 
-    colA, colB = st.columns([1, 1])
-    with colA:
-        threshold = st.slider("Confidence threshold (%)", 50, 95, 80, 1)
-    with colB:
-        top_n = st.slider("Options to show when below threshold", 3, 10, 5, 1)
-
     if st.button("Run SAP material matching", type="primary"):
-        step5_df, diag = match_materials(
+        # No user-tunable threshold/top-N per requirements. Keep stable defaults in code.
+        step5_df = match_materials(
             output_d=st.session_state.step4_d_df,
             master_df=st.session_state.material_master_df,
-            threshold=float(threshold),
-            top_n=int(top_n),
         )
         st.session_state.step5_df = step5_df
-        st.session_state.step5_diag = diag
 
     if st.session_state.get("step5_df") is None:
         st.info("Click 'Run SAP material matching' to generate Output.")
@@ -439,9 +445,6 @@ if st.session_state.step_idx == 5:
     )
     st.session_state.step5_df = edited
 
-    st.subheader("Low-confidence diagnostics (below threshold)")
-    st.dataframe(st.session_state.get("step5_diag", pd.DataFrame()), use_container_width=True)
-
     st.divider()
     if st.button("I have verified the SAP Materials. Move to Step 6", type="primary"):
         st.session_state.verified[5] = True
@@ -449,34 +452,27 @@ if st.session_state.step_idx == 5:
 
     st.stop()
 
-
 # Step 6
 if st.session_state.step_idx == 6:
     require_verified(5)
     st.header("Step 6 – Let's get the Sundries & Labor for the Flooring Work")
 
-    st.caption("Trade/Material combination workbook is embedded at: data/Trade_Material_Combinations.xlsx. "
-               "You may upload a replacement for this session if needed.")
-
-    combo_upload = st.file_uploader("Upload Trade_Material_Combinations.xlsx (optional override)", type=["xlsx"], key="u_trade_combo")
-    if combo_upload:
-        st.session_state.trade_combo_bytes = combo_upload.getvalue()
-
-    # Decide workbook path: embedded file on disk; if override bytes, write temp to /tmp
-    workbook_path = TRADE_COMBO_DEFAULT_PATH
-    if st.session_state.trade_combo_bytes:
-        import tempfile
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
-        tmp.write(st.session_state.trade_combo_bytes)
-        tmp.flush()
-        workbook_path = tmp.name
+    st.caption("Trade/Material combination workbook is embedded at: data/Trade_Material_Combinations.xlsx")
 
     if st.session_state.step4_d_df is None or st.session_state.step4_d_df.empty:
         st.error("Step 4 Output D is missing/empty.")
         st.stop()
 
+    if st.session_state.step5_df is None or st.session_state.step5_df.empty:
+        st.error("Step 5 output is missing/empty. Step 6 requires SAP Material mapping.")
+        st.stop()
+
     if st.button("Generate Sundries & Labor", type="primary"):
-        st.session_state.step6_df = build_step6_output(st.session_state.step4_d_df, workbook_path)
+        st.session_state.step6_df = build_step6_output(
+            output_d=st.session_state.step4_d_df,
+            step5_df=st.session_state.step5_df,
+            workbook_path=TRADE_COMBO_DEFAULT_PATH,
+        )
 
     if st.session_state.step6_df is None:
         st.info("Click 'Generate Sundries & Labor' to create the Step 6 output.")
@@ -497,7 +493,6 @@ if st.session_state.step_idx == 6:
 
     st.stop()
 
-
 # Step 7
 if st.session_state.step_idx == 7:
     require_verified(6)
@@ -505,7 +500,6 @@ if st.session_state.step_idx == 7:
 
     st.caption("Review the finalized outputs and export the full package as an Excel workbook.")
 
-    # Collect all key outputs (best-effort)
     dfs = {
         "Step1_BuilderSelections": st.session_state.get("step1_df"),
         "Step2_Rooms": st.session_state.get("step2_rooms_df"),
@@ -518,7 +512,6 @@ if st.session_state.step_idx == 7:
         "Step6_Sundries_Labor": st.session_state.get("step6_df"),
     }
 
-    # Quick KPI summary
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Rooms", 0 if dfs["Step2_Rooms"] is None else len(dfs["Step2_Rooms"]))
     k2.metric("Output D lines", 0 if dfs["Step4_OutputD_TradeMatQty"] is None else len(dfs["Step4_OutputD_TradeMatQty"]))
