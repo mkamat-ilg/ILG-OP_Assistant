@@ -10,7 +10,7 @@ from src.step5_utils import load_material_master, match_materials
 from src.step6_utils import build_step6_output
 from src.export_utils import build_export_workbook
 
-APP_TITLE = "Order Processing – Steps 0–7"
+APP_TITLE = "Order Processing Assistant"
 TAKEOFF_DEFAULT_PATH = os.path.join("data", "ELSTON II - Takeoff.xlsx")
 MATERIAL_MASTER_DEFAULT_PATH = os.path.join("data", "Material_Description.xlsx")
 TRADE_COMBO_DEFAULT_PATH = os.path.join("data", "Trade_Material_Combinations.xlsx")
@@ -60,14 +60,14 @@ st.title(APP_TITLE)
 with st.sidebar:
     st.subheader("Steps (gated)")
     labels = [
-        "1. Start Here with Selection Sheet & Floorplan",
-        "2. What is ILG doing?",
-        "3. How does the Floor look like?",
-        "4. Rooms with Installations & Transitions",
-        "5. Installation Material Takeoff by Room & Trade",
-        "6. Get SAP # for Materials",
-        "7. Get Sundries & Labor for Trade Installation",
-        "8. Get Ready to Send to SAP",
+        "Start Here with Selection Sheet & Floorplan",
+        "What is ILG doing?",
+        "How does the Floor look like?",
+        "Rooms with Installations & Transitions",
+        "Installation Material Takeoff by Room & Trade",
+        "Get SAP # for Materials",
+        "Get Sundries & Labor for Trade Installation",
+        "Get Ready to Send to SAP",
     ]
     for i, label in enumerate(labels):
         done = "✅" if st.session_state.verified.get(i) else "⬜"
@@ -77,7 +77,7 @@ with st.sidebar:
 
 # Step 0
 if st.session_state.step_idx == 0:
-    st.header("Step 0 – Mandatory uploads")
+    st.header("Please Upload Selection Sheet and Floorplan to get started")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -102,7 +102,7 @@ if st.session_state.step_idx == 0:
 # Step 1
 if st.session_state.step_idx == 1:
     require_verified(0)
-    st.header("Step 1 – Builder Selections → Flooring Scope")
+    st.header("Step 1 – Let's get the Flooring Work for ILG")
 
     sel_file = st.session_state.selection_file
     left, right = st.columns([1, 1])
@@ -139,7 +139,7 @@ if st.session_state.step_idx == 1:
 # Step 2
 if st.session_state.step_idx == 2:
     require_verified(1)
-    st.header("Step 2 – Floorplan → Rooms + Transitions")
+    st.header("Step 2 – Let's get the Rooms & Transitions")
 
     fp_file = st.session_state.floorplan_file
     left, right = st.columns([1, 1])
@@ -180,7 +180,7 @@ if st.session_state.step_idx == 2:
 # Step 3
 if st.session_state.step_idx == 3:
     require_verified(2)
-    st.header("Step 3 – Merge Step 1 + Step 2")
+    st.header("Step 3 – Consolidated Summary of Rooms, Trades & Transitions required")
 
     step1 = st.session_state.step1_df.copy() if st.session_state.step1_df is not None else pd.DataFrame(columns=["Room","Trade","Material Description"])
     rooms = st.session_state.step2_rooms_df.copy() if st.session_state.step2_rooms_df is not None else pd.DataFrame(columns=["Room"])
@@ -221,7 +221,7 @@ if st.session_state.step_idx == 3:
 # Step 4
 if st.session_state.step_idx == 4:
     require_verified(3)
-    st.header("Step 4 – Cross reference Takeoff (Rooms/Trade/Gross Qty)")
+    st.header("Step 4 – Let's get the Quantity to be ordered for Installation Materials as per TakeOff")
 
     st.caption("Takeoff workbook is embedded with the app at: data/ELSTON II - Takeoff.xlsx. You can still upload a replacement for this session if needed.")
     takeoff_upload = st.file_uploader("Upload ELSTON II - Takeoff.xlsx (if not preloaded)", type=["xlsx"], key="u_takeoff")
@@ -264,7 +264,7 @@ if st.session_state.step_idx == 4:
 # Step 5
 if st.session_state.step_idx == 5:
     require_verified(4)
-    st.header("Step 5 – Map Material Descriptions to SAP Materials")
+    st.header("Step 5 – Let's identify the SAP Materials")
 
     st.caption("Material master is expected at: data/Material_Description.xlsx. "
                "If not embedded yet, upload it below for this session. (Later we can embed it permanently.)")
@@ -330,7 +330,7 @@ if st.session_state.step_idx == 5:
 # Step 6
 if st.session_state.step_idx == 6:
     require_verified(5)
-    st.header("Step 6 – Sundries & Labor from Trade/Material Combinations")
+    st.header("Step 6 – Let's get the Sundries & Labor for the Flooring Work")
 
     st.caption("Trade/Material combination workbook is embedded at: data/Trade_Material_Combinations.xlsx. "
                "You may upload a replacement for this session if needed.")
@@ -378,7 +378,7 @@ if st.session_state.step_idx == 6:
 # Step 7
 if st.session_state.step_idx == 7:
     require_verified(6)
-    st.header("Step 7 – Final Review & Export")
+    st.header("Step 7 – Final Review to Send to SAP")
 
     st.caption("Review the finalized outputs and export the full package as an Excel workbook.")
 
