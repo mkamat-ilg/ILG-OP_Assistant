@@ -1,5 +1,12 @@
 import os
 import streamlit as st
+
+# Optional: live timer refresh (Streamlit >=1.27 typically)
+try:
+    from streamlit import st_autorefresh  # type: ignore
+except Exception:  # pragma: no cover
+    st_autorefresh = None  # type: ignore
+
 import pandas as pd
 import time
 
@@ -105,6 +112,12 @@ def _render_timers_every_screen() -> None:
     """Render overall + per-section timers in the main page for every step."""
     _ensure_timer_state()
 
+    # Live refresh while overall timer is running
+    if st.session_state.run_start_perf is not None and st.session_state.run_end_perf is None:
+        if st_autorefresh is not None:
+            # Refresh once per second to keep the running timer ticking.
+            st_autorefresh(interval=1000, key=f"timer_refresh_{st.session_state.get('step_idx', 0)}")
+
     # Compact always-on header
     st.divider()
     st.subheader("Timers")
@@ -176,6 +189,11 @@ def init_state():
     st.session_state.setdefault("trade_combo_bytes", None)
     st.session_state.setdefault("step6_df", None)
     st.session_state.setdefault("export_xlsx_bytes", None)
+
+    # Timing guards (avoid double-counting on reruns)
+    st.session_state.setdefault("step0_timed_once", False)
+    st.session_state.setdefault("step3_timed_once", False)
+    st.session_state.setdefault("step4_timed_once", False)
     _ensure_timer_state()
 
 init_state()
@@ -289,6 +307,15 @@ if st.session_state.step_idx == 0:
     if st.session_state.selection_file and st.session_state.floorplan_file:
         st.success("Both required documents are loaded.")
         if st.button("Proceed to Step 1", type="primary"):
+            # Step 0 timing: once per run, record time since first processing trigger (if any)
+            # If the overall timer has not started yet, start it here (files are now committed for processing).
+            if not st.session_state.get("step0_timed_once", False):
+                _t0 = time.perf_counter()
+                _start_overall_timer_if_needed()
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 0 load/start", _dt)
+                st.session_state.step0_timed_once = True
+
             st.session_state.verified[0] = True
             go(1)
     else:
@@ -470,7 +497,14 @@ if st.session_state.step_idx == 3:
         st.stop()
 
     # Initial build (3A removed).
+    # Time the consolidation work once per run (avoid double counting on reruns)
+    _t0 = time.perf_counter()
     outA_init, _ = apply_step3_merge_v2(step1, rooms, trans)
+    if not st.session_state.get("step3_timed_once", False):
+        _start_overall_timer_if_needed()
+        _dt = time.perf_counter() - _t0
+        _record_section("Step 3 consolidation", _dt)
+        st.session_state.step3_timed_once = True
 
     # --------------------------------------------------
     # Enforce canonical Room → Trade mapping (normalization-safe)
@@ -509,7 +543,7 @@ if st.session_state.step_idx == 3:
             column_config={
                 "Trade": st.column_config.SelectboxColumn(
                     "Trade",
-                    options=["Carpet", "Tile", "LVP", "Vinyl", "Wood"],
+                    options=["Carpet", "Tile", "LVP", "Vinyl", "Wood", "Non Flooring"],
                     required=True,
                 )
             },
@@ -609,6 +643,7 @@ if st.session_state.step_idx == 4:
     st.caption("Gross Qty and UOM are loaded strictly from the embedded takeoff workbook: data/ELSTON II - Takeoff.xlsx")
 
     try:
+        _t0 = time.perf_counter()
         st.session_state.takeoff_df = load_takeoff(TAKEOFF_DEFAULT_PATH, override_bytes=None)
         st.success(f"Loaded takeoff rows: {len(st.session_state.takeoff_df)}")
     except Exception as e:
@@ -628,6 +663,12 @@ if st.session_state.step_idx == 4:
         step1_df=st.session_state.step1_df,
         takeoff_df=st.session_state.takeoff_df,
     )
+
+    if not st.session_state.get("step4_timed_once", False):
+        _start_overall_timer_if_needed()
+        _dt = time.perf_counter() - _t0
+        _record_section("Step 4 takeoff merge", _dt)
+        st.session_state.step4_timed_once = True
 
     st.subheader("Output C (editable): Room | Trade | Gross Qty | UOM | Material Description")
     if st.session_state.step4_c_df is None:
