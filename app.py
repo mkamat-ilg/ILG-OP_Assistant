@@ -347,55 +347,17 @@ if st.session_state.step_idx == 1:
             if st.button("Run OpenAI extraction", type="primary"):
                 _start_overall_timer_if_needed()
                 _t0 = time.perf_counter()
-                _start_overall_timer_if_needed()
-                _t0 = time.perf_counter()
-                _start_overall_timer_if_needed()
-                _t0 = time.perf_counter()
-                _start_overall_timer_if_needed()
-                _t0 = time.perf_counter()
-                _start_overall_timer_if_needed()
-                _t0 = time.perf_counter()
-                _start_overall_timer_if_needed()
-                _t0 = time.perf_counter()
-                _start_overall_timer_if_needed()
-                _t0 = time.perf_counter()
-                _start_overall_timer_if_needed()
-                _t0 = time.perf_counter()
-                _start_overall_timer_if_needed()
-                _t0 = time.perf_counter()
-                _start_overall_timer_if_needed()
-                _t0 = time.perf_counter()
-                _start_overall_timer_if_needed()
-                _t0 = time.perf_counter()
-                _start_overall_timer_if_needed()
-                _t0 = time.perf_counter()
-                imgs = pdf_bytes_to_images(sel_file["bytes"]) if sel_file["ext"] == "pdf" else image_bytes_to_images(sel_file["bytes"])
+
+                imgs = (
+                    pdf_bytes_to_images(sel_file["bytes"])
+                    if sel_file["ext"] == "pdf"
+                    else image_bytes_to_images(sel_file["bytes"])
+                )
                 rows = extract_step1_builder_selections(imgs)
                 st.session_state.step1_df = pd.DataFrame(rows, columns=["Room", "Trade", "Material Description"])
+
                 _dt = time.perf_counter() - _t0
                 _record_section("Step 1 extraction", _dt)
-                _dt = time.perf_counter() - _t0
-                _record_section("Step 2 extraction", _dt)
-                _dt = time.perf_counter() - _t0
-                _record_section("Step 1 extraction", _dt)
-                _dt = time.perf_counter() - _t0
-                _record_section("Step 1 extraction", _dt)
-                _dt = time.perf_counter() - _t0
-                _record_section("Step 1 extraction", _dt)
-                _dt = time.perf_counter() - _t0
-                _record_section("Step 1 extraction", _dt)
-                _dt = time.perf_counter() - _t0
-                _record_section("Step 1 extraction", _dt)
-                _dt = time.perf_counter() - _t0
-                _record_section("Step 2 extraction", _dt)
-                _dt = time.perf_counter() - _t0
-                _record_section("Step 2 extraction", _dt)
-                _dt = time.perf_counter() - _t0
-                _record_section("Step 2 extraction", _dt)
-                _dt = time.perf_counter() - _t0
-                _record_section("Step 2 extraction", _dt)
-                _dt = time.perf_counter() - _t0
-                _record_section("Step 2 extraction", _dt)
         with colB:
             if st.button("Reset table"):
                 st.session_state.step1_df = pd.DataFrame(columns=["Room", "Trade", "Material Description"])
@@ -430,10 +392,22 @@ if st.session_state.step_idx == 2:
         colA, colB = st.columns([1, 1])
         with colA:
             if st.button("Run OpenAI extraction", type="primary"):
-                imgs = pdf_bytes_to_images(fp_file["bytes"]) if fp_file["ext"] == "pdf" else image_bytes_to_images(fp_file["bytes"])
+                _start_overall_timer_if_needed()
+                _t0 = time.perf_counter()
+
+                imgs = (
+                    pdf_bytes_to_images(fp_file["bytes"])
+                    if fp_file["ext"] == "pdf"
+                    else image_bytes_to_images(fp_file["bytes"])
+                )
                 rooms, transitions = extract_step2_rooms_transitions(imgs)
                 st.session_state.step2_rooms_df = pd.DataFrame(rooms, columns=["Room"])
-                st.session_state.step2_trans_df = pd.DataFrame(transitions, columns=["Room","Adjoining Room","Transition needed"])
+                st.session_state.step2_trans_df = pd.DataFrame(
+                    transitions, columns=["Room", "Adjoining Room", "Transition needed"]
+                )
+
+                _dt = time.perf_counter() - _t0
+                _record_section("Step 2 extraction", _dt)
         with colB:
             if st.button("Reset outputs"):
                 st.session_state.step2_rooms_df = pd.DataFrame(columns=["Room"])
@@ -543,7 +517,7 @@ if st.session_state.step_idx == 3:
             column_config={
                 "Trade": st.column_config.SelectboxColumn(
                     "Trade",
-                    options=["Carpet", "Tile", "LVP", "Vinyl", "Wood", "Non Flooring"],
+                    options=["Carpet", "Tile", "LVP", "Vinyl", "Wood", "Not Flooring"],
                     required=True,
                 )
             },
